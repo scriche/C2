@@ -71,8 +71,9 @@ def packet_callback(packet):
                 knock_index += 1
                 if knock_index == len(knock_sequence):
                     print("Port-knocking sequence completed. Sending acknowledgment.")
-                    # Simple acknowledgment - just send one SYN-ACK packet
-                    ack = IP(dst=src_ip)/TCP(sport=80, dport=src_port, flags="SA")
+                    # Simple acknowledgment - just send one SYN-ACK with some data: ACK
+                    ack = IP(dst=knock_ip)/TCP(sport=source_port, dport=dest_port, flags="SA", seq=1, ack=1)
+                    ack = ack / b"ACK"
                     send(ack)
                     knock_index = 0
                     knock_ip = None

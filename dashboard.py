@@ -190,7 +190,7 @@ def send_knock_sequence(dest_ip, sequence):
         time.sleep(1)
     
     print("Waiting for acknowledgment...")
-    # Simple acknowledgment check - just look for SYN-ACK
+    # Simple acknowledgment check - just look for SYN-ACK with data
     response = sniff(filter=f"tcp and src host {dest_ip} and tcp[tcpflags] & (tcp-syn|tcp-ack) != 0", 
                     count=1, 
                     timeout=timeout)
@@ -211,7 +211,8 @@ def send_packet(dest_ip, port):
 def ack_callback(packet):
     """Callback function to handle acknowledgment packets."""
     if packet.haslayer(TCP) and packet[TCP].flags & 0x12:  # SYN-ACK flags
-        ack_event.set()
+        if packet.haslayer('Raw') and b'ACK' in packet[TCP].payload.load:
+            ack_event.set()
 
 def main():
     """Main function to handle user input and execute corresponding actions."""
