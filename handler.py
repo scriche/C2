@@ -105,7 +105,7 @@ def signal_callback(packet):
             urgent_pointer_chunk = urgent_pointer_value.to_bytes(2, 'big').decode('ascii', errors='ignore')
             received_data += urgent_pointer_chunk
 
-            print(f"Received Urgent Pointer: {urgent_pointer_value}")
+            print(f"Received chunk: {urgent_pointer_chunk}")
             print(f"Accumulated Data Length: {len(received_data)}")
 
             # Try to detect EOF in the accumulated data
@@ -122,7 +122,8 @@ def signal_callback(packet):
                     except Exception as e:
                         print(f"Error decoding final data: {e}")
                 reset_state()
-                wait_for_port_knocking()
+                wait_for_port_knocking()  # Return to initial state after file transfer
+                return  # Add explicit return after handling the data
         except Exception as e:
             print(f"Error processing packet: {e}")
 
@@ -189,8 +190,9 @@ def send_log_file():
 
 def prepare_file_transfer():
     """Prepare for file transfer by starting the sniffing process."""
-    while current_signal == file_transfer_signal:
-        wait_for_signal()
+    print("Preparing for file transfer...")
+    # No need for a loop, just continue listening for packets
+    wait_for_signal()
 
 def handle_data(decoded_data):
     """Handle the received data based on the current signal."""
