@@ -101,29 +101,30 @@ def signal_callback(packet):
                 return
 
         # Process urgent pointer data
-        urgent_pointer_chunk = urgent_pointer_value.to_bytes(2, 'big').decode(errors='ignore')
-        received_data += urgent_pointer_chunk
-
-        print(f"Received Urgent Pointer: {urgent_pointer_value}")
-        print(f"Received Data Chunk: {urgent_pointer_chunk}")
-
         try:
-            # Decode received data
-            padded_data = received_data + '=' * ((4 - len(received_data) % 4) % 4)
-            decoded_data = base64.b64decode(padded_data)
-            print(f"Decoded Data: {decoded_data}")
-            if eof_signal.encode() in decoded_data:
-                print("EOF signal detected.")
-                handle_data(decoded_data.replace(eof_signal.encode(), b''))
+            urgent_pointer_chunk = urgent_pointer_value.to_bytes(2, 'big').decode('ascii', errors='ignore')
+            received_data += urgent_pointer_chunk
+
+            print(f"Received Urgent Pointer: {urgent_pointer_value}")
+            print(f"Accumulated Data Length: {len(received_data)}")
+
+            # Try to detect EOF in the accumulated data
+            if eof_signal in received_data:
+                print("EOF signal detected in data.")
+                # Split the data at EOF signal
+                data_parts = received_data.split(eof_signal, 1)
+                if len(data_parts) >= 1:
+                    try:
+                        # Remove padding if any
+                        clean_data = data_parts[0].rstrip('=')
+                        decoded_data = base64.b64decode(clean_data)
+                        handle_data(decoded_data)
+                    except Exception as e:
+                        print(f"Error decoding final data: {e}")
                 reset_state()
                 wait_for_port_knocking()
-            elif received_data.endswith(base64.b64encode(eof_signal.encode()).decode()):
-                print("EOF signal detected in the last packet.")
-                handle_data(decoded_data.replace(eof_signal.encode(), b''))
-                reset_state()
-                wait_for_port_knocking()
-        except (UnicodeDecodeError, base64.binascii.Error) as e:
-            print(f"Decoding error: {e}")
+        except Exception as e:
+            print(f"Error processing packet: {e}")
 
 def handle_initial_signal():
     """Handle the initial signal received."""
@@ -205,36 +206,21 @@ def handle_data(decoded_data):
 def save_file(decoded_data):
     """Save the file from the decoded data."""
     try:
-        metadata, file_content = split_metadata_content(decoded_data.decode(errors='ignore'))
-    except ValueError:
-        print("Error splitting metadata and content.")
-        return
+        # Split at the first | character
+        split_index = decoded_data.find(b'|')
+        if split_index == -1:
+            print("Invalid file data format")
+            return
 
-    if not metadata or not file_content:
-        return
+        file_name = decoded_data[:split_index].decode('utf-8').strip()
+        file_content = decoded_data[split_index + 1:]
 
-    file_name = metadata.strip()
-    try:
-        file_content = base64.b64decode(file_content.encode())
-    except (UnicodeDecodeError, base64.binascii.Error) as e:
-        print(f"Decoding error: {e}. Forcing save.")
-        file_content = file_content.encode()
-
-    save_to_file(file_name, file_content)
-
-def split_metadata_content(decoded_data):
-    """Split the decoded data into metadata and content."""
-    try:
-        return decoded_data.split('|', 1)
-    except ValueError:
-        print("Error splitting metadata and content.")
-        return None, None
-
-def save_to_file(file_name, content):
-    """Save the content to a file."""
-    with open(os.path.join(os.getcwd(), file_name), 'wb') as file:
-        file.write(content)
-    print(f"File {file_name} created successfully.")
+        save_path = os.path.join(os.getcwd(), file_name)
+        with open(save_path, 'wb') as file:
+            file.write(file_content)
+        print(f"File saved successfully: {save_path}")
+    except Exception as e:
+        print(f"Error saving file: {e}")
 
 def reset_state():
     """Reset the state variables."""
