@@ -127,7 +127,7 @@ def save_file(encoded_data):
         print("No metadata found, skipping file save.")
         return
     file_name = metadata.strip()
-    file_content = decode_base64_data(file_content.strip())  # Decode the file content
+    file_content = file_content.strip()  # Decode the file content
     if file_content is None:
         print("No file content found, skipping file save.")
         return

@@ -229,9 +229,11 @@ def handle_data(decoded_data):
     if current_signal == file_transfer_signal:
         save_file(decoded_data)
     elif current_signal == watcher_start_signal:
-        watcher_command = decoded_data.decode(errors='ignore')
-        print(f"Watcher command received: {watcher_command}")
-        start_watcher(watcher_command)
+        print(f"Watcher command received: {decoded_data}")
+        start_watcher(decoded_data.decode('utf-8'))
+    elif current_signal == watcher_stop_signal:
+        print("Stop watcher command received.")
+        stop_watcher()
     reset_state()
 
 def save_file(decoded_data):
