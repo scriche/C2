@@ -67,7 +67,7 @@ def send_data(dest_ip, source_port, dest_port, file_path, is_file):
     else:
         metadata = ""
         encoded_content = file_path
-    data = metadata + encoded_content + "//"  # Append EOF signal to the data
+    data = metadata + encoded_content + "\x00"  # Append EOF signal to the data
     encoded_data = base64.b64encode(data.encode()).decode()  # Encode the entire data in base64
 
     print(f"Encoded Data: {encoded_data}")  # Debugging statement

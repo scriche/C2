@@ -6,7 +6,7 @@ import sys
 import socket
 import time
 
-eof_signal = "//"
+eof_signal = "\x00"
 received_data = ""
 current_signal = None
 sniffing = False
