@@ -157,6 +157,9 @@ def signal_callback(packet):
             
             reset_state()
             wait_for_port_knocking()
+            # Stop the chunk timer
+            if chunk_timer:
+                chunk_timer.cancel()
         else:
             reset_chunk_timer()
 
