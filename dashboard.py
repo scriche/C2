@@ -79,7 +79,7 @@ def packet_callback(packet):
             print(f"Decoded Data: {decoded_data}")
             if urgent_pointer_value == eof_signal:
                 print("EOF signal detected.")
-                handle_received_data(decoded_data.split(eof_signal)[0])
+                handle_received_data(decoded_data)
                 received_data = ""  # Reset received_data after handling
         except (UnicodeDecodeError, base64.binascii.Error) as e:
             print(f"Decoding error: {e}")

@@ -266,6 +266,10 @@ def reset_state():
     current_signal = 0
     signal_received = False
     received_chunks = 0
+    # close the sniffing thread if it's running
+    sniff_thread = threading.active_count()
+    if sniff_thread > 0:
+        sniff_thread.join(timeout=1)
     print("State reset.")
 
 def open_communication_port():
