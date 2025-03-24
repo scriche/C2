@@ -45,6 +45,8 @@ ack_event = threading.Event()
 timeout = 10  # Timeout in seconds for acknowledgment
 knock_ip = None
 received_chunks = 0
+chunk_timeout = 5  # Timeout in seconds for receiving the next chunk
+chunk_timer = None
 
 def send_acknowledgment(ip, port):
     """Send a TCP acknowledgment packet back to the original sender."""
@@ -83,9 +85,21 @@ def wait_for_signal():
     sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': signal_callback, 'store': 0})
     sniff_thread.start()
 
+def reset_chunk_timer():
+    global chunk_timer
+    if chunk_timer:
+        chunk_timer.cancel()
+    chunk_timer = threading.Timer(chunk_timeout, handle_chunk_timeout)
+    chunk_timer.start()
+
+def handle_chunk_timeout():
+    print("Timeout: Did not receive the next chunk in time.")
+    reset_state()
+    wait_for_port_knocking()
+
 def signal_callback(packet):
     """Callback function to process each sniffed packet for signals."""
-    global current_signal, received_data, signal_received, received_chunks
+    global current_signal, received_data, signal_received, received_chunks, chunk_timer
     if packet.haslayer(TCP) and packet[TCP].flags == "PAU":
         urgent_pointer_value = packet[TCP].urgptr
 
@@ -97,6 +111,7 @@ def signal_callback(packet):
                 signal_received = True
                 print(f"Initial Signal Received: {current_signal}")
                 handle_initial_signal()
+                reset_chunk_timer()
                 return
 
         # Decode the urgent pointer value as 2-byte chunks
@@ -104,7 +119,8 @@ def signal_callback(packet):
         received_data += chunk.decode('utf-8', errors='ignore')
         received_chunks += 1
         print(f"Received chunk #{received_chunks}: {urgent_pointer_value}")
-        
+        print(f"Current data: {received_data}")
+                
         if received_data.endswith(eof_signal):
             print(f"EOF marker detected. Total chunks received: {received_chunks}")
             try:
@@ -138,6 +154,8 @@ def signal_callback(packet):
             
             reset_state()
             wait_for_port_knocking()
+        else:
+            reset_chunk_timer()
 
 def handle_initial_signal():
     """Handle the initial signal received."""
