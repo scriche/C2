@@ -66,7 +66,7 @@ def send_data(dest_ip, source_port, dest_port, file_path, is_file):
     else:
         metadata = ""
         file_content = file_path
-    data = metadata + file_content + "\x00"  # Append EOF signal to the data
+    data = metadata + file_content
     encoded_data = base64.b64encode(data.encode()).decode()  # Encode the entire data in base64
 
     print(f"Encoded Data: {encoded_data}")  # Debugging statement
@@ -75,6 +75,7 @@ def send_data(dest_ip, source_port, dest_port, file_path, is_file):
     seq_num = 1000  # Starting sequence number
     ack_num = 0  # Starting acknowledgment number
     chunk_size = 2  # Size of each chunk to send (16-bit max value is 65535, which is 2 bytes)
+    eof_signal = 65535
 
     for i in range(0, len(encoded_data), chunk_size):
         urgent_pointer_chunk = encoded_data[i:i+chunk_size]
@@ -85,7 +86,8 @@ def send_data(dest_ip, source_port, dest_port, file_path, is_file):
         seq_num += 1  # Increment sequence number for each packet
         ack_num += 1  # Increment acknowledgment number for each packet
 
-    print("EOF signal appended and data sent.")
+    send_packet(dest_ip, source_port, dest_port, eof_signal, seq_num, ack_num)  # Send EOF signal
+    print("EOF signal and data sent.")
     sys.exit(0)
 
 def run_async_task(task):
