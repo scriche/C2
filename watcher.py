@@ -65,10 +65,15 @@ if __name__ == "__main__":
 
     path = sys.argv[1]
     dest_ip = sys.argv[2]
-
-    if not os.path.isdir(path):
-        print(f"Error: {path} is not a directory.")
+    
+# Check if the path is a file or directory
+    if not os.path.exists(path):
+        print(f"Path {path} does not exist.")
         sys.exit(1)
+    if os.path.isfile(path):
+        print(f"Watching file: {path}")
+    elif os.path.isdir(path):
+        print(f"Watching directory: {path}")
 
     print(f"Watching: {path}, Destination IP: {dest_ip}")
     watch_path(path, dest_ip)
