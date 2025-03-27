@@ -23,7 +23,7 @@ def get_local_ip():
     return local_ip
 
 # Configuration variables
-dest_ip = input("Enter the destination IP for sending packets: ")
+dest_ip = None
 local_ip = get_local_ip()
 source_port = 80
 dest_port = 80
@@ -42,6 +42,7 @@ knock_sequence = [3434, 4545, 5656]
 knock_index = 0
 communication_port = 80
 ack_event = threading.Event()
+sniff_thread = None
 timeout = 10  # Timeout in seconds for acknowledgment
 knock_ip = None
 received_chunks = 0
@@ -51,7 +52,7 @@ chunk_timer = None
 def send_acknowledgment(ip, port):
     """Send a TCP acknowledgment packet back to the original sender."""
     ip_layer = IP(dst=ip)
-    # Change flags from "A" to "SA" and use sport=80 to match expected port
+    # Change flags from "A" to "Swait_for_sigA" and use sport=80 to match expected port
     tcp_layer = TCP(sport=80, dport=port, flags="SA")/b"ACK"
     ack_packet = ip_layer/tcp_layer
     send(ack_packet)
@@ -75,15 +76,11 @@ def packet_callback(packet):
                 if knock_index == len(knock_sequence):
                     print("Port-knocking sequence completed. Sending acknowledgment.")
                     send_acknowledgment(knock_ip, src_port)
-                    open_communication_port()
+                    global dest_ip
+                    dest_ip = knock_ip
+                    print(f"Communication port {communication_port} opened.")
                     knock_index = 0
                     wait_for_signal()
-
-def wait_for_signal():
-    """Wait for a signal after port-knocking sequence."""
-    print("Waiting for signal...")
-    sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': signal_callback, 'store': 0})
-    sniff_thread.start()
 
 def reset_chunk_timer():
     global chunk_timer
@@ -259,39 +256,22 @@ def reset_state():
     current_signal = 0
     signal_received = False
     received_chunks = 0
-    # close the sniffing thread if it's running
-    sniff_thread = threading.active_count()
-    if sniff_thread > 0:
-        sniff_thread.join(timeout=1)
     print("State reset.")
     wait_for_signal()
 
-def open_communication_port():
-    """Open the designated communication port."""
-    global communication_port
-    print(f"Communication port {communication_port} opened.")
+def wait_for_signal():
+    """Wait for a signal after port-knocking sequence."""
+    print("Waiting for signal...")
+    global sniff_thread
+    if not sniff_thread or not sniff_thread.is_alive():
+        sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': signal_callback, 'store': 0})
+        sniff_thread.start()
 
 def wait_for_port_knocking():
     """Wait for the port-knocking sequence."""
-    global sniff_thread
     print("Waiting for port-knocking sequence...")
-    sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': packet_callback, 'store': 0})
-    sniff_thread.start()
-
-def run_async_task(task):
-    """Run a task asynchronously."""
-    threading.Thread(target=task).start()
-
-def reset_state():
-    """Reset the state variables."""
-    global current_signal, received_data, signal_received, received_chunks
-    received_data = ""
-    current_signal = 0
-    signal_received = False
-    received_chunks = 0
-    if sniff_thread:
-        sniff_thread.join(timeout=1)
-    print("State reset.")
+    ack_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': packet_callback, 'store': 0})
+    ack_thread.start()
 
 if __name__ == "__main__":
     wait_for_port_knocking()
