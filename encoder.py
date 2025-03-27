@@ -20,13 +20,6 @@ def send_packet(dest_ip, source_port, dest_port, urgent_pointer, seq_num, ack_nu
     tcp = TCP(sport=source_port, dport=dest_port, flags="PAU", urgptr=urgent_pointer, seq=seq_num, ack=ack_num)
     packet = ip/tcp
 
-    # Debugging statements
-    print(f"Dest IP: {dest_ip}")
-    print(f"Source Port: {source_port}, Dest Port: {dest_port}")
-    print(f"Urgent Pointer: {urgent_pointer}")
-    print(f"Sequence Number: {seq_num}")
-    print(f"Acknowledgment Number: {ack_num}")
-
     send(packet)
 
 def send_signal(dest_ip, source_port, dest_port, signal):
