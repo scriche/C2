@@ -33,7 +33,11 @@ def send_signal(dest_ip, source_port, dest_port, signal):
         "KL_STOP": 0x02,
         "FT": 0x03,
         "WT_START": 0x04,
-        "WT_STOP": 0x05
+        "WT_STOP": 0x05,
+        "GRAB": 0x06,
+        "RUN": 0x07,
+        "CLOSE": 0x08,
+        "UNINSTALL": 0x09,
     }
 
     if signal not in signal_map:
