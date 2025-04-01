@@ -38,6 +38,7 @@ def send_signal(dest_ip, source_port, dest_port, signal):
         "RUN": 0x07,
         "CLOSE": 0x08,
         "UNINSTALL": 0x09,
+        "PT": 0x10
     }
 
     if signal not in signal_map:
@@ -123,6 +124,10 @@ if __name__ == "__main__":
         time.sleep(2)
         run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, True))
     elif signal == "WT_START" and file_path:
+        run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
+        time.sleep(2)
+        run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, False))
+    elif signal == "PT" and file_path:
         run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
         time.sleep(2)
         run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, False))
