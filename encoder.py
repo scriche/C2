@@ -113,7 +113,7 @@ if __name__ == "__main__":
     source_port = 80
     dest_port = 80
 
-    if (signal == "FT" or signal =="GRAB") and file_path:
+    if signal == "FT" and file_path:
         try:
             if not os.path.isfile(file_path):
                 raise FileNotFoundError("The specified file does not exist.")
@@ -123,11 +123,7 @@ if __name__ == "__main__":
         run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
         time.sleep(2)
         run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, True))
-    elif signal == "WT_START" and file_path:
-        run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
-        time.sleep(2)
-        run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, False))
-    elif signal == "PT" and file_path:
+    elif signal in ("WT_START", "PT", "GRAB") and file_path:
         run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
         time.sleep(2)
         run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, False))
