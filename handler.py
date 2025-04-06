@@ -257,8 +257,7 @@ def run_program(file_path):
             text=True,
             timeout=30
         )
-        output = f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
-        
+        output = result.stdout
         # send the output back to the encoder script
         os.system(f'python3 encoder.py PT:{dest_ip} "{output}"')
             

