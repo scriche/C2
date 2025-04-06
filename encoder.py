@@ -113,7 +113,7 @@ if __name__ == "__main__":
     source_port = 80
     dest_port = 80
 
-    if signal == "FT" and file_path:
+    if (signal == "FT" or signal =="GRAB") and file_path:
         try:
             if not os.path.isfile(file_path):
                 raise FileNotFoundError("The specified file does not exist.")
