@@ -123,7 +123,7 @@ if __name__ == "__main__":
         run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
         time.sleep(2)
         run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, True))
-    elif signal in ("WT_START", "PT", "GRAB") and file_path:
+    elif signal in ("WT_START", "PT", "GRAB", "RUN") and file_path:
         run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
         time.sleep(2)
         run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, False))

