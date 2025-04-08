@@ -58,18 +58,16 @@ def watch_path(path, dest_ip):
     observer.join()
     print("Stopped watching path.")
 
-if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python3 watcher.py <file_path_or_directory> <dest_ip>")
-        sys.exit(1)
+def main(path=None, dest_ip=None):
+    """Main function to start watching."""
+    if path is None or dest_ip is None:
+        print("Usage: main(path=<file_path_or_directory>, dest_ip=<dest_ip>)")
+        return
 
-    path = sys.argv[1]
-    dest_ip = sys.argv[2]
-    
-# Check if the path is a file or directory
+    # Check if the path is a file or directory
     if not os.path.exists(path):
         print(f"Path {path} does not exist.")
-        sys.exit(1)
+        return
     if os.path.isfile(path):
         print(f"Watching file: {path}")
     elif os.path.isdir(path):
@@ -77,3 +75,10 @@ if __name__ == "__main__":
 
     print(f"Watching: {path}, Destination IP: {dest_ip}")
     watch_path(path, dest_ip)
+
+# Ensure the script runs only when executed directly
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("Usage: python3 watcher.py <file_path_or_directory> <dest_ip>")
+        sys.exit(1)
+    main(sys.argv[1], sys.argv[2])

@@ -94,23 +94,17 @@ def run_async_task(task):
     """Run a task asynchronously."""
     threading.Thread(target=task).start()
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2 or len(sys.argv) > 3:
-        print("Usage: python3 encoder.py <signal:ip> [<file_path>]")
-        exit(1)
-
-    signal_ip = sys.argv[1]
-    file_path = sys.argv[2] if len(sys.argv) == 3 else None
-
+def main(signal_ip, file_path=None):
+    """Main function to handle signals and data transfer."""
     try:
         signal, dest_ip = signal_ip.split(":")
     except ValueError:
         print("Error: Invalid format. Use <signal:ip>.")
-        exit(1)
+        return
 
     if not validate_ip(dest_ip):
         print("Error: Invalid destination IP address.")
-        exit(1)
+        return
 
     source_port = 80
     dest_port = 80
@@ -121,7 +115,7 @@ if __name__ == "__main__":
                 raise FileNotFoundError("The specified file does not exist.")
         except FileNotFoundError as e:
             print(f"Error: {e}")
-            exit(1)
+            return
         run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
         time.sleep(2)
         run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, True))
@@ -131,3 +125,13 @@ if __name__ == "__main__":
         run_async_task(lambda: send_data(dest_ip, source_port, dest_port, file_path, False))
     else:
         run_async_task(lambda: send_signal(dest_ip, source_port, dest_port, signal))
+
+# Ensure the script runs only when executed directly
+if __name__ == "__main__":
+    if len(sys.argv) < 2 or len(sys.argv) > 3:
+        print("Usage: python3 encoder.py <signal:ip> [<file_path>]")
+        exit(1)
+
+    signal_ip = sys.argv[1]
+    file_path = sys.argv[2] if len(sys.argv) == 3 else None
+    main(signal_ip, file_path)

