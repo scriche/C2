@@ -295,7 +295,7 @@ def main():
 
     display_menu()
     while True:
-        choice = input("Enter your choice: ")
+        choice = input("Enter your choice: \n")
 
         if choice in options:
             clear_screen()  # Clear the terminal screen after the option is executed
