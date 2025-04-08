@@ -274,6 +274,7 @@ def run_program(file_path):
 def handle_data(decoded_data):
     """Handle the received data based on the current signal."""
     global current_signal
+    decoded_data = decoded_data.decode('utf-8', errors='ignore')
     match current_signal:
         case 3:
             save_file(decoded_data)

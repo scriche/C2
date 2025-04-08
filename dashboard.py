@@ -289,16 +289,15 @@ def main():
     }
 
     while True:
+        clear_screen()  # Clear the terminal screen after the option is executed
         display_menu()  # Display the menu at the top
         choice = input("Enter your choice: ")
 
         if choice in options:
             options[choice]()  # Execute the selected option
+            
         else:
             print("Invalid choice.")
             time.sleep(1)  # Pause briefly to allow the user to see the message
-
-        #clear_screen()  # Clear the terminal screen after the option is executed
-
 if __name__ == "__main__":
     main()

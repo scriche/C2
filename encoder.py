@@ -1,10 +1,12 @@
-from scapy.all import IP, TCP, send
+from scapy.all import IP, TCP, send, conf
 import socket
 import sys
 import base64
 import os
 import threading
 import time
+
+conf.verb = 0  # Suppress Scapy output
 
 def validate_ip(ip):
     """Validate the given IP address."""
