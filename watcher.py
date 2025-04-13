@@ -9,7 +9,7 @@ def send_file(file_path, dest_ip, deleted=False):
     """Send the file to the destination IP using encoder.py."""
     print(f"Preparing to send file: {file_path}, deleted: {deleted}")
     if deleted:
-        file_name = file_path + ".deleted"
+        file_name = file_path
     elif not os.path.isfile(file_path):
         print(f"File {file_path} does not exist.")
         return
@@ -27,20 +27,29 @@ class CustomEventHandler(FileSystemEventHandler):
     def __init__(self, dest_ip):
         self.dest_ip = dest_ip
 
+    def should_ignore(self, file_path):
+        """Check if the file should be ignored."""
+        return file_path.endswith('.swp')
+
     def on_created(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self.should_ignore(event.src_path):
             print(f"File {event.src_path} created.")
             send_file(event.src_path, self.dest_ip)
 
     def on_modified(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self.should_ignore(event.src_path):
             print(f"File {event.src_path} modified.")
             send_file(event.src_path, self.dest_ip)
 
     def on_deleted(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self.should_ignore(event.src_path):
             print(f"File {event.src_path} deleted.")
-            send_file(event.src_path, self.dest_ip, deleted=True)
+            # Create an empty file with .deleted appended to its name
+            deleted_file_path = event.src_path + ".deleted"
+            with open(deleted_file_path, 'w') as f:
+                pass  # Create an empty file
+            send_file(deleted_file_path, self.dest_ip, deleted=True)
+            os.remove(deleted_file_path)  # Clean up the temporary .deleted file
 
 def watch_path(path, dest_ip):
     """Watch the path for file events."""
