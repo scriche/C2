@@ -1,8 +1,5 @@
 import platform
-import struct
-import time
 import os
-from evdev import InputDevice, categorize, ecodes
 
 def main():
     # Get the directory of the current script
@@ -36,6 +33,8 @@ def main():
             listener.join()
 
     else:
+        from evdev import InputDevice, categorize, ecodes  # Import evdev here
+
         # Path to the input device (you may need to change this to the correct event number)
         input_device = "/dev/input/event0"
         output_file = os.path.join(script_dir, "log.txt")

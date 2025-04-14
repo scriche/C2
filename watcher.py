@@ -2,6 +2,7 @@ import os
 import sys
 import socket
 import time
+import subprocess
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -19,9 +20,12 @@ def send_file(file_path, dest_ip, deleted=False):
 def send_data(file_path, dest_ip):
     """Send the file to the destination IP using encoder.py."""
     print(f"Sending file {file_path} to {dest_ip}")
-    command = f'python3 encoder.py FT:{dest_ip} "{file_path}"'
-    os.system(command)
-    print("File sent successfully.")
+    command = ['python3', 'encoder.py', f'FT:{dest_ip}', file_path]
+    try:
+        subprocess.run(command, check=True)
+        print("File sent successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error sending file: {e}")
 
 class CustomEventHandler(FileSystemEventHandler):
     def __init__(self, dest_ip):

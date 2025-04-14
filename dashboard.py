@@ -264,8 +264,24 @@ def display_menu():
 def main():
     """Main function to handle user input and execute corresponding actions."""
     global current_signal, dest_ip
-    dest_ip = input("Enter the destination IP for sending signals: ")
-    knock_sequence = input("Enter the port-knocking sequence (comma-separated): ").split(",")
+    # repeat until valid IP is entered
+    while True:
+        try:
+            dest_ip = input("Enter the destination IP for sending signals: ")
+            socket.inet_aton(dest_ip)  # Validate IP address format
+            break
+        except socket.error:
+            print("Invalid IP address format. Please try again.")
+    # repeat until valid port-knocking sequence is entered gracefully handling errors
+    while True:
+        try:
+            knock_sequence = input("Enter the port-knocking sequence (comma-separated): ")
+            knock_sequence = [int(port.strip()) for port in knock_sequence.split(',') if port.strip().isdigit()]
+            if len(knock_sequence) < 3:
+                raise ValueError("No valid ports entered.")
+            break
+        except ValueError as e:
+            print(f"Invalid port-knocking sequence. Please try again.")
 
     # Start sniffing for acknowledgment packets with more specific filter
     sniff_thread = threading.Thread(
